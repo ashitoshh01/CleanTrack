@@ -1,0 +1,130 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ──────────────────────────────────────────────
+
+enum Role {
+  CITIZEN
+  STAFF
+  ADMIN
+}
+
+enum WasteType {
+  PLASTIC
+  GARBAGE
+  CONSTRUCTION
+  ELECTRONIC
+  MEDICAL
+  HAZARDOUS
+  SEWAGE
+  OVERFLOWING_BIN
+  DEAD_ANIMAL
+  OTHER
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ComplaintStatus {
+  PENDING
+  VERIFIED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REJECTED
+}
+
+enum NotificationType {
+  STATUS_CHANGE
+  ASSIGNMENT
+  GENERAL
+}
+
+// ─── Models ─────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(CITIZEN)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  complaints      Complaint[]     @relation("UserComplaints")
+  assignedComplaints Complaint[]  @relation("StaffAssignments")
+  statusChanges   StatusHistory[]
+  notifications   Notification[]
+
+  @@map("users")
+}
+
+model Complaint {
+  id               String          @id @default(cuid())
+  userId           String
+  imageUrl         String
+  latitude         Float
+  longitude        Float
+  address          String
+  wasteType        WasteType
+  severity         Severity
+  status           ComplaintStatus @default(PENDING)
+  description      String          @db.VarChar(500)
+  resolvedImageUrl String?
+  resolutionNotes  String?
+  assignedStaffId  String?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  user          User            @relation("UserComplaints", fields: [userId], references: [id], onDelete: Cascade)
+  assignedStaff User?           @relation("StaffAssignments", fields: [assignedStaffId], references: [id], onDelete: SetNull)
+  statusHistory StatusHistory[]
+
+  @@index([status])
+  @@index([wasteType])
+  @@index([severity])
+  @@index([userId])
+  @@map("complaints")
+}
+
+model StatusHistory {
+  id          String          @id @default(cuid())
+  complaintId String
+  status      ComplaintStatus
+  changedById String
+  timestamp   DateTime        @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+  changedBy User      @relation(fields: [changedById], references: [id], onDelete: Cascade)
+
+  @@index([complaintId])
+  @@map("status_history")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  type      NotificationType
+  message   String
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@map("notifications")
+}
